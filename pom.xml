@@ -12,7 +12,7 @@
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <javafx.version>17.0.12</javafx.version>
+        <javafx.version>17.0.16</javafx.version>
         <!-- JavaFX native classifier; set by OS profiles below -->
         <javafx.platform>UNSET</javafx.platform>
     </properties>
