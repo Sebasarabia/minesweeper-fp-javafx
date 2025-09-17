@@ -16,8 +16,8 @@ redo hooks, and cleaner UI code.
 - Configurable presets (Beginner / Intermediate / Advanced) plus custom games.
 - Safer first click: a safe zone is generated around the first reveal even on
   very dense boards.
-- Two-strike safety: the first mine you open is revealed without losing; the
-  second mine hit ends the round.
+- Two-strike safety: the first time you poke a mine it is revealed without
+  losing; touching that (or any other) mine again ends the round.
 - Clearing safe territory auto-reveals the bordering mines so you can plan the
   next move without toggling flags.
 

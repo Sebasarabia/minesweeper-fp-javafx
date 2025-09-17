@@ -112,7 +112,13 @@ public final class GridBoard implements Board {
     @Override
     public Board reveal(int r, int c) {
         if (!inBounds(r, c) || lost) return this;
-        if (!visible[r][c].isHidden()) return this;
+        VisibleState state = visible[r][c];
+        if (!state.isHidden()) {
+            if (state.isRevealed() && layout != null && layout[r][c] == -1) {
+                return revealMine(r, c);
+            }
+            return this;
+        }
         if (layout == null) {
             return ensureLayout(r, c).reveal(r, c);
         }
