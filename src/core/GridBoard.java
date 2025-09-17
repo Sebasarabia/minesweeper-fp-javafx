@@ -3,8 +3,10 @@ package core;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 public final class GridBoard implements Board {
     private final int rows;
@@ -16,14 +18,15 @@ public final class GridBoard implements Board {
     private final boolean lost;
     private final int revealedCount;
     private final int flaggedCount;
+    private final int mineHits; // number of manual mine hits so far
 
     public GridBoard(int rows, int cols, int mines, MinePlacer placer) {
-        this(rows, cols, mines, placer, null, fillVisible(rows, cols, VisibleState.HIDDEN), false, 0, 0);
+        this(rows, cols, mines, placer, null, fillVisible(rows, cols, VisibleState.HIDDEN), false, 0, 0, 0);
     }
 
     private GridBoard(int rows, int cols, int mines, MinePlacer placer,
                       int[][] layout, VisibleState[][] visible,
-                      boolean lost, int revealedCount, int flaggedCount) {
+                      boolean lost, int revealedCount, int flaggedCount, int mineHits) {
         if (rows <= 0 || cols <= 0) throw new IllegalArgumentException("Invalid size");
         if (mines < 0 || mines >= rows * cols) throw new IllegalArgumentException("Invalid mine count");
         this.rows = rows;
@@ -35,6 +38,7 @@ public final class GridBoard implements Board {
         this.lost = lost;
         this.revealedCount = revealedCount;
         this.flaggedCount = flaggedCount;
+        this.mineHits = mineHits;
     }
 
     private static VisibleState[][] fillVisible(int rows, int cols, VisibleState state) {
@@ -113,7 +117,7 @@ public final class GridBoard implements Board {
             return ensureLayout(r, c).reveal(r, c);
         }
         if (layout[r][c] == -1) {
-            return revealAllMines();
+            return revealMine(r, c);
         }
         return floodReveal(r, c);
     }
@@ -133,7 +137,7 @@ public final class GridBoard implements Board {
             next[r][c] = VisibleState.FLAGGED;
             nextFlagged++;
         }
-        return new GridBoard(rows, cols, mines, placer, layout, next, lost, revealedCount, nextFlagged);
+        return new GridBoard(rows, cols, mines, placer, layout, next, lost, revealedCount, nextFlagged, mineHits);
     }
 
     @Override
@@ -168,12 +172,14 @@ public final class GridBoard implements Board {
 
     private GridBoard ensureLayout(int safeR, int safeC) {
         int[][] generated = placer.placeMines(rows, cols, mines, safeR, safeC);
-        return new GridBoard(rows, cols, mines, placer, generated, visible, lost, revealedCount, flaggedCount);
+        return new GridBoard(rows, cols, mines, placer, generated, visible, lost, revealedCount, flaggedCount, mineHits);
     }
 
     private GridBoard floodReveal(int startR, int startC) {
         VisibleState[][] next = copyVisible(visible);
         int nextRevealed = revealedCount;
+        int nextFlagged = flaggedCount;
+        List<int[]> newlyOpened = new ArrayList<>();
         Deque<int[]> queue = new ArrayDeque<>();
         queue.add(new int[]{startR, startC});
         while (!queue.isEmpty()) {
@@ -184,6 +190,7 @@ public final class GridBoard implements Board {
             if (!next[r][c].isHidden()) continue;
             next[r][c] = VisibleState.REVEALED;
             nextRevealed++;
+            newlyOpened.add(new int[]{r, c});
             if (layout[r][c] == 0) {
                 for (int dr = -1; dr <= 1; dr++) {
                     for (int dc = -1; dc <= 1; dc++) {
@@ -193,10 +200,53 @@ public final class GridBoard implements Board {
                 }
             }
         }
-        return new GridBoard(rows, cols, mines, placer, layout, next, false, nextRevealed, flaggedCount);
+        if (!newlyOpened.isEmpty()) {
+            // Reveal bordering mines around the newly opened area without ending the game.
+            Set<Long> minesToReveal = new HashSet<>();
+            for (int[] cell : newlyOpened) {
+                int r = cell[0];
+                int c = cell[1];
+                for (int dr = -1; dr <= 1; dr++) {
+                    for (int dc = -1; dc <= 1; dc++) {
+                        if (dr == 0 && dc == 0) continue;
+                        int nr = r + dr;
+                        int nc = c + dc;
+                        if (!inBounds(nr, nc)) continue;
+                        if (layout[nr][nc] == -1) {
+                            minesToReveal.add(cellKey(nr, nc));
+                        }
+                    }
+                }
+            }
+            for (long key : minesToReveal) {
+                int mr = (int) (key >> 32);
+                int mc = (int) key;
+                VisibleState current = next[mr][mc];
+                if (current.isRevealed()) continue;
+                if (current.isFlagged()) {
+                    nextFlagged = Math.max(0, nextFlagged - 1);
+                }
+                next[mr][mc] = VisibleState.REVEALED;
+            }
+        }
+        return new GridBoard(rows, cols, mines, placer, layout, next, false, nextRevealed, nextFlagged, mineHits);
     }
 
-    private GridBoard revealAllMines() {
+    private GridBoard revealMine(int r, int c) {
+        // First mine hit is forgiven; the second ends the game.
+        if (mineHits == 0) {
+            VisibleState[][] next = copyVisible(visible);
+            int nextFlagged = flaggedCount;
+            if (next[r][c].isFlagged()) {
+                nextFlagged = Math.max(0, nextFlagged - 1);
+            }
+            next[r][c] = VisibleState.REVEALED;
+            return new GridBoard(rows, cols, mines, placer, layout, next, false, revealedCount, nextFlagged, mineHits + 1);
+        }
+        return revealAllMines(1);
+    }
+
+    private GridBoard revealAllMines(int additionalHits) {
         VisibleState[][] next = copyVisible(visible);
         int nextRevealed = revealedCount;
         int nextFlagged = flaggedCount;
@@ -210,9 +260,12 @@ public final class GridBoard implements Board {
                     nextFlagged = Math.max(0, nextFlagged - 1);
                 }
                 next[r][c] = VisibleState.REVEALED;
-                nextRevealed++;
             }
         }
-        return new GridBoard(rows, cols, mines, placer, layout, next, true, nextRevealed, nextFlagged);
+        return new GridBoard(rows, cols, mines, placer, layout, next, true, nextRevealed, nextFlagged, mineHits + Math.max(0, additionalHits));
+    }
+
+    private static long cellKey(int r, int c) {
+        return (((long) r) << 32) ^ (c & 0xffffffffL);
     }
 }

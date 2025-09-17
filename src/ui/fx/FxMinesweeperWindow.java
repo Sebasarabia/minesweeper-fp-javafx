@@ -161,7 +161,7 @@ public final class FxMinesweeperWindow {
         minesLeft.setText(String.format("Mines: %03d", left));
         if (board.isLost())      status.setText("Game over — click New to play again. (Scroll to pan, pinch or Cmd/Ctrl+Wheel to zoom)");
         else if (board.isWon())  status.setText("You win! (Scroll to pan, pinch or Cmd/Ctrl+Wheel to zoom)");
-        else                     status.setText("Left: reveal | Right: flag | Double: chord | Scroll pan | Arrows move | Space reveal | F flag | Enter chord");
+        else                     status.setText("Left: reveal | Right: flag | Double: chord | Scroll pan | Arrows move | Space reveal | F flag | Enter chord | First mine is forgiven; adjacent mines auto-show");
     }
 
     private void refreshTheme(Scene scene) {
